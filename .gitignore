@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Backups (created by deploy script)
+backups/
+
+# Environment files (secrets!)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ruff
+.ruff_cache/
+
+# Private keys & secrets (CRITICAL!)
+*.pem
+*.key
+id_rsa
+id_ed25519
+*.crt
+*.csr
+
+# Claude working directory
+.claude/
+
+# Misc
+*.bak
+*.tmp
+.cache/

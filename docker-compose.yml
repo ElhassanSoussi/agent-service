@@ -1,0 +1,52 @@
+# Agent Service - Docker Compose Configuration
+# Usage: docker-compose up -d
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent-service
+    ports:
+      - "8000:8000"
+    environment:
+      # REQUIRED: Set these before running!
+      - AGENT_ADMIN_KEY=${AGENT_ADMIN_KEY:-change_me_admin_key}
+      - AGENT_KEY_HASH_SECRET=${AGENT_KEY_HASH_SECRET:-change_me_hash_secret}
+      # Optional: Legacy single API key (for backwards compatibility)
+      - AGENT_API_KEY=${AGENT_API_KEY:-}
+      # Optional: LLM configuration
+      - AGENT_PLANNER_MODE=${AGENT_PLANNER_MODE:-rules}
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-}
+      # Builder Mode (Phase 12)
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Database path (inside container)
+      - AGENT_DB_PATH=/app/data/jobs.db
+    volumes:
+      # Persist SQLite database
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Optional: Add nginx reverse proxy for production
+# Uncomment below for SSL termination and rate limiting
+
+#   nginx:
+#     image: nginx:alpine
+#     container_name: agent-nginx
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     volumes:
+#       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+#       - ./certs:/etc/nginx/certs:ro
+#     depends_on:
+#       - agent
+#     restart: unless-stopped
