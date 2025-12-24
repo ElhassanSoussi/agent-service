@@ -21,6 +21,7 @@ from app.api.feedback import router as feedback_router
 from app.api.batches import router as batches_router  # Phase A1
 from app.api.approvals_ui import router as approvals_ui_router  # Phase A1 UI
 from app.api.developer import router as developer_router
+from app.api.xone import router as xone_router  # Xone AI Agent API
 from app.ui.command_center import router as command_center_router  # Phase A2
 from app.core.security import APIKeyMiddleware
 from app.core.request_logging import RequestLoggingMiddleware
@@ -168,6 +169,7 @@ app.include_router(feedback_router)
 app.include_router(batches_router)
 app.include_router(approvals_ui_router)
 app.include_router(developer_router)
+app.include_router(xone_router)  # Xone AI Agent API
 app.include_router(command_center_router)  # Phase A2: Command Center
 
 # Mount static files for PWA (Phase A2)

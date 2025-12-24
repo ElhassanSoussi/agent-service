@@ -253,7 +253,7 @@ class BatchAction(Base):
 class AuditLog(Base):
     """
     SQLite model for audit logs (Phase A1).
-    
+
     Tracks all significant events: batch creation, approval, rejection, execution.
     """
     __tablename__ = "audit_logs"
@@ -275,4 +275,65 @@ class AuditLog(Base):
     __table_args__ = (
         Index("ix_audit_logs_batch_ts", "batch_id", "ts"),
         Index("ix_audit_logs_event_type", "event_type"),
+    )
+
+
+# =============================================================================
+# Xone Memory Models (Single-User)
+# =============================================================================
+
+class XoneMemory(Base):
+    """
+    Long-term memory for Xone (single-user AI agent).
+
+    Stores insights, facts, preferences, and decisions for future reference.
+    """
+    __tablename__ = "xone_memories"
+
+    id = Column(Text, primary_key=True, index=True)
+    content = Column(Text, nullable=False)  # What to remember
+    category = Column(Text, nullable=False, default="other", index=True)
+    # Categories: insight, preference, decision, fact, other
+    created_at = Column(Text, nullable=False, index=True)
+    accessed_count = Column(Integer, default=0, nullable=False)
+    last_accessed_at = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_xone_memories_category_created", "category", "created_at"),
+    )
+
+
+class XoneConversation(Base):
+    """
+    Conversation history for Xone (single-user).
+    """
+    __tablename__ = "xone_conversations"
+
+    id = Column(Text, primary_key=True, index=True)
+    title = Column(Text, nullable=False)
+    created_at = Column(Text, nullable=False, index=True)
+    updated_at = Column(Text, nullable=False)
+
+    # Relationships
+    messages = relationship("XoneMessage", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class XoneMessage(Base):
+    """
+    Individual messages within Xone conversations.
+    """
+    __tablename__ = "xone_messages"
+
+    id = Column(Text, primary_key=True, index=True)
+    conversation_id = Column(Text, ForeignKey("xone_conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(Text, nullable=False)  # "user" or "assistant"
+    content = Column(Text, nullable=False)
+    tool_calls_json = Column(Text, nullable=True)  # JSON array of tool calls
+    created_at = Column(Text, nullable=False)
+
+    # Relationship
+    conversation = relationship("XoneConversation", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_xone_messages_conversation_created", "conversation_id", "created_at"),
     )
