@@ -823,9 +823,13 @@ BASE_SCRIPTS = r'''
 
         try {
             const systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || null;
+            const apiKey = getApiKey();
             const res = await fetch(CHAT_ENDPOINT, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": apiKey || ""
+                },
                 body: JSON.stringify({ prompt, system_prompt: systemPrompt }),
             });
 
@@ -860,9 +864,13 @@ BASE_SCRIPTS = r'''
         let content = "";
         try {
             const systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || null;
+            const apiKey = getApiKey();
             const res = await fetch(STREAM_ENDPOINT, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": apiKey || ""
+                },
                 body: JSON.stringify({ prompt, system_prompt: systemPrompt, stream: true }),
             });
 
