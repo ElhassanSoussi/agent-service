@@ -5,10 +5,14 @@ API key authentication required for all endpoints except /health.
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.utils import get_openapi
+
+# Load environment variables from .env file
+load_dotenv()
 
 from app.api.agent import router as agent_router
 from app.api.metrics import router as metrics_router
