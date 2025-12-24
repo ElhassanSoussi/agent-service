@@ -347,13 +347,21 @@ def get_sidebar_html(active_page: str = "chat") -> str:
         <aside id="sidebar" class="flex flex-col flex-shrink-0">
             <!-- Header with Brand -->
             <div class="sidebar-header">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-8 h-8 rounded-lg border border-teal-500/40 bg-teal-500/15 flex items-center justify-center">
-                        <div class="w-3 h-3 rounded-full bg-teal-400"></div>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-xl border-2 border-teal-500/60 bg-gradient-to-br from-teal-500/20 to-blue-500/20 flex items-center justify-center shadow-lg">
+                        <svg class="w-6 h-6 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
                     </div>
-                    <span class="text-lg font-semibold tracking-wide text-white">Xone</span>
+                    <div class="flex-1">
+                        <div class="text-lg font-bold tracking-wide text-white">Xone</div>
+                        <div class="text-xs text-teal-400/80">by Elhassan Soussi</div>
+                    </div>
                 </div>
-                <button id="newChatBtn" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 rounded-lg transition font-medium text-sm">
+                <div class="mb-3 px-1">
+                    <div class="text-sm text-slate-300">Hello, <span class="font-semibold text-white">Elhassan</span></div>
+                </div>
+                <button id="newChatBtn" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 rounded-lg transition font-medium text-sm shadow-md hover:shadow-lg">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     New Chat
                 </button>
@@ -404,6 +412,7 @@ BASE_SCRIPTS = r'''
     const DARK_MODE_KEY = "agent_service_dark_mode";
     const SYSTEM_PROMPT_KEY = "agent_service_system_prompt";
     const STREAMING_MODE_KEY = "agent_service_streaming_mode";
+    const MODEL_KEY = "agent_service_claude_model";
     const LEGACY_SYSTEM_PROMPT_KEY = "xone_system_prompt";
     const LEGACY_STREAMING_KEY = "xone_streaming";
 
@@ -965,6 +974,55 @@ BASE_SCRIPTS = r'''
         systemPromptInput.value = prompt;
     }
 
+    function initModelSelector() {
+        const selector = $("modelSelector");
+        if (!selector) return;
+
+        // Load saved model preference
+        const savedModel = localStorage.getItem(MODEL_KEY);
+        if (savedModel) {
+            selector.value = savedModel;
+        }
+
+        // Save on change
+        selector.addEventListener("change", () => {
+            const selectedModel = selector.value;
+            localStorage.setItem(MODEL_KEY, selectedModel);
+            console.log("Model preference saved:", selectedModel);
+        });
+    }
+
+    function initConnectors() {
+        // Chat connectors dropdown
+        const chatBtn = $("addChatConnectorBtn");
+        const chatDropdown = $("chatConnectorDropdown");
+        if (chatBtn && chatDropdown) {
+            chatBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                chatDropdown.classList.toggle("hidden");
+                const devDropdown = $("devConnectorDropdown");
+                if (devDropdown) devDropdown.classList.add("hidden");
+            });
+        }
+
+        // Developer connectors dropdown
+        const devBtn = $("addDevConnectorBtn");
+        const devDropdown = $("devConnectorDropdown");
+        if (devBtn && devDropdown) {
+            devBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                devDropdown.classList.toggle("hidden");
+                if (chatDropdown) chatDropdown.classList.add("hidden");
+            });
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener("click", () => {
+            if (chatDropdown) chatDropdown.classList.add("hidden");
+            if (devDropdown) devDropdown.classList.add("hidden");
+        });
+    }
+
     function updateProviderBadge(provider, model) {
         const badge = $("providerBadge");
         const text = $("providerText");
@@ -976,6 +1034,12 @@ BASE_SCRIPTS = r'''
         }
         text.textContent = `${provider}/${model || "default"}`;
         if (badge) badge.classList.remove("hidden");
+
+        // Update current model display
+        const currentModelEl = $("currentModel");
+        if (currentModelEl && model) {
+            currentModelEl.textContent = model;
+        }
     }
 
     async function fetchLLMHealth() {
@@ -1024,6 +1088,8 @@ BASE_SCRIPTS = r'''
         updateApiKeyUI();
         loadSystemPrompt();
         initStreamingToggle();
+        initModelSelector();
+        initConnectors();
         loadConversations();
         initSections();
 
@@ -1294,6 +1360,46 @@ def get_chat_sections_html() -> str:
     """Return HTML for chat and left-side panels."""
     return r'''
         <section id="section-chat" data-section-panel="chat" class="section-panel">
+            <!-- Connectors Bar -->
+            <div class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 px-4 py-2">
+                <div class="max-w-3xl mx-auto flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-400">Connectors:</span>
+                        <div id="chatConnectorsList" class="flex items-center gap-2">
+                            <span class="text-xs text-slate-500">None active</span>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button id="addChatConnectorBtn" class="flex items-center gap-1 px-2 py-1 text-xs bg-teal-600 hover:bg-teal-700 text-white rounded transition">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Add Connector
+                        </button>
+                        <div id="chatConnectorDropdown" class="hidden absolute right-0 mt-1 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-20">
+                            <div class="py-1">
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition">
+                                    <div class="font-medium">Web Search</div>
+                                    <div class="text-slate-500">Search the web</div>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition">
+                                    <div class="font-medium">GitHub</div>
+                                    <div class="text-slate-500">Connect repositories</div>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition">
+                                    <div class="font-medium">Calendar</div>
+                                    <div class="text-slate-500">Manage events</div>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition opacity-50 cursor-not-allowed">
+                                    <div class="font-medium">More coming soon...</div>
+                                    <div class="text-slate-500">Stay tuned</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="messagesContainer" class="custom-scrollbar">
                 <div class="max-w-3xl mx-auto px-4 py-6">
                     <div id="emptyState" class="flex flex-col items-center justify-center py-16 text-center">
@@ -1400,7 +1506,21 @@ def get_chat_sections_html() -> str:
                     </div>
 
                     <div class="content-panel p-4">
-                        <h3 class="text-sm font-semibold text-slate-200 mb-2">Provider</h3>
+                        <h3 class="text-sm font-semibold text-slate-200 mb-2">Claude Model</h3>
+                        <p class="text-xs text-slate-400 mb-3">Select which Claude model to use for responses.</p>
+                        <select id="modelSelector" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-teal-500">
+                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Recommended - Balanced)</option>
+                            <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (Fastest & Cheapest)</option>
+                            <option value="claude-3-opus-20240229">Claude 3 Opus (Most Capable)</option>
+                            <option value="claude-3-haiku-20240307">Claude 3 Haiku (Legacy)</option>
+                        </select>
+                        <div class="mt-2 text-xs text-slate-400">
+                            Current: <span id="currentModel" class="text-teal-400 font-mono">Loading...</span>
+                        </div>
+                    </div>
+
+                    <div class="content-panel p-4">
+                        <h3 class="text-sm font-semibold text-slate-200 mb-2">Provider Status</h3>
                         <div id="providerBadge" class="inline-flex items-center gap-2 rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-200">
                             <span class="w-2 h-2 rounded-full bg-teal-400"></span>
                             <span id="providerText">ollama</span>
@@ -1465,40 +1585,55 @@ def get_chat_sections_html() -> str:
                         <h3 class="text-sm font-semibold text-slate-200 mb-3">Start Agent Cycle</h3>
                         <p class="text-xs text-slate-400 mb-3">Select agents to run in parallel</p>
 
-                        <div class="space-y-2 mb-4">
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="job_hunter" checked />
-                                <div class="flex-1">
-                                    <div class="font-medium">Job Hunter</div>
-                                    <div class="text-xs text-slate-400">Find high-paying freelance jobs</div>
+                        <div class="space-y-3 mb-4">
+                            <label class="flex items-center gap-3 p-3 text-sm border border-slate-700 rounded-lg hover:bg-slate-800/40 transition cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-5 w-5 rounded border-slate-600 bg-slate-900 text-teal-500" value="job_hunter" checked />
+                                <div class="flex items-center gap-2 flex-1">
+                                    <span class="px-2 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded text-xs font-semibold">💼 HUNTER</span>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-white">Job Hunter</div>
+                                        <div class="text-xs text-slate-400">Find high-paying freelance jobs</div>
+                                    </div>
                                 </div>
                             </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="content_creator" checked />
-                                <div class="flex-1">
-                                    <div class="font-medium">Content Creator</div>
-                                    <div class="text-xs text-slate-400">Create revenue-generating content</div>
+                            <label class="flex items-center gap-3 p-3 text-sm border border-slate-700 rounded-lg hover:bg-slate-800/40 transition cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-5 w-5 rounded border-slate-600 bg-slate-900 text-teal-500" value="content_creator" checked />
+                                <div class="flex items-center gap-2 flex-1">
+                                    <span class="px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded text-xs font-semibold">✍️ CREATOR</span>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-white">Content Creator</div>
+                                        <div class="text-xs text-slate-400">Create revenue-generating content</div>
+                                    </div>
                                 </div>
                             </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="developer" checked />
-                                <div class="flex-1">
-                                    <div class="font-medium">Developer</div>
-                                    <div class="text-xs text-slate-400">Build profitable SaaS products</div>
+                            <label class="flex items-center gap-3 p-3 text-sm border border-slate-700 rounded-lg hover:bg-slate-800/40 transition cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-5 w-5 rounded border-slate-600 bg-slate-900 text-teal-500" value="developer" checked />
+                                <div class="flex items-center gap-2 flex-1">
+                                    <span class="px-2 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded text-xs font-semibold">💻 DEV</span>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-white">Developer</div>
+                                        <div class="text-xs text-slate-400">Build profitable SaaS products</div>
+                                    </div>
                                 </div>
                             </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="marketer" checked />
-                                <div class="flex-1">
-                                    <div class="font-medium">Marketer</div>
-                                    <div class="text-xs text-slate-400">Promote products and drive traffic</div>
+                            <label class="flex items-center gap-3 p-3 text-sm border border-slate-700 rounded-lg hover:bg-slate-800/40 transition cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-5 w-5 rounded border-slate-600 bg-slate-900 text-teal-500" value="marketer" checked />
+                                <div class="flex items-center gap-2 flex-1">
+                                    <span class="px-2 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded text-xs font-semibold">📢 MARKET</span>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-white">Marketer</div>
+                                        <div class="text-xs text-slate-400">Promote products and drive traffic</div>
+                                    </div>
                                 </div>
                             </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="researcher" checked />
-                                <div class="flex-1">
-                                    <div class="font-medium">Researcher</div>
-                                    <div class="text-xs text-slate-400">Discover new opportunities</div>
+                            <label class="flex items-center gap-3 p-3 text-sm border border-slate-700 rounded-lg hover:bg-slate-800/40 transition cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-5 w-5 rounded border-slate-600 bg-slate-900 text-teal-500" value="researcher" checked />
+                                <div class="flex items-center gap-2 flex-1">
+                                    <span class="px-2 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded text-xs font-semibold">🔬 RESEARCH</span>
+                                    <div class="flex-1">
+                                        <div class="font-medium text-white">Researcher</div>
+                                        <div class="text-xs text-slate-400">Discover new opportunities</div>
+                                    </div>
                                 </div>
                             </label>
                         </div>
@@ -1536,6 +1671,46 @@ def get_developer_sections_html() -> str:
     """Return HTML for the developer chat page."""
     return r'''
         <section id="section-developer" data-section-panel="developer" class="section-panel">
+            <!-- Connectors Bar -->
+            <div class="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800 px-4 py-2">
+                <div class="max-w-3xl mx-auto flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-400">Connectors:</span>
+                        <div id="devConnectorsList" class="flex items-center gap-2">
+                            <span class="text-xs text-slate-500">None active</span>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <button id="addDevConnectorBtn" class="flex items-center gap-1 px-2 py-1 text-xs bg-teal-600 hover:bg-teal-700 text-white rounded transition">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Add Connector
+                        </button>
+                        <div id="devConnectorDropdown" class="hidden absolute right-0 mt-1 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-20">
+                            <div class="py-1">
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition">
+                                    <div class="font-medium">GitHub</div>
+                                    <div class="text-slate-500">Connect repositories</div>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition">
+                                    <div class="font-medium">Linear</div>
+                                    <div class="text-slate-500">Track issues</div>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition">
+                                    <div class="font-medium">Docker</div>
+                                    <div class="text-slate-500">Manage containers</div>
+                                </button>
+                                <button class="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 transition opacity-50 cursor-not-allowed">
+                                    <div class="font-medium">More coming soon...</div>
+                                    <div class="text-slate-500">Stay tuned</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="developerMessagesContainer" class="custom-scrollbar">
                 <div class="max-w-3xl mx-auto px-4 py-6">
                     <div id="developerEmptyState" class="flex flex-col items-center justify-center py-16 text-center">

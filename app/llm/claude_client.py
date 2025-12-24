@@ -15,8 +15,8 @@ from anthropic.types import Message, TextBlock, ToolUseBlock
 
 logger = logging.getLogger(__name__)
 
-# Default model
-DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+# Default model (read from env or use fallback)
+DEFAULT_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
 
 # Global client (initialized once)
 _client: Optional[AsyncAnthropic] = None
