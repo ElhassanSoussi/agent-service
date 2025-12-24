@@ -140,6 +140,70 @@ TOOLS = [
             },
             "required": ["content", "category"]
         }
+    },
+    {
+        "name": "web_search",
+        "description": "Search the web using DuckDuckGo. Use this to find information, opportunities, competitors, trends, job listings, etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query (e.g., 'freelance python jobs', 'SaaS ideas 2025')"
+                },
+                "num_results": {
+                    "type": "integer",
+                    "description": "Number of results to return (default: 10, max: 50)"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "fetch_url",
+        "description": "Fetch and read content from a web page. Use this to analyze competitors, read articles, extract information from specific URLs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "URL to fetch"
+                }
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "search_freelance_jobs",
+        "description": "Search for freelance job opportunities on Upwork, Fiverr, Freelancer. Use this to find paying gigs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "keywords": {
+                    "type": "string",
+                    "description": "Job keywords (e.g., 'python developer', 'content writer', 'data entry')"
+                },
+                "platform": {
+                    "type": "string",
+                    "description": "Platform: 'upwork', 'fiverr', 'freelancer', or 'all'"
+                }
+            },
+            "required": ["keywords"]
+        }
+    },
+    {
+        "name": "search_saas_ideas",
+        "description": "Search for SaaS product ideas and opportunities. Use this to find profitable niches.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "niche": {
+                    "type": "string",
+                    "description": "Specific niche or leave empty for general search"
+                }
+            },
+            "required": []
+        }
     }
 ]
 
@@ -180,6 +244,14 @@ def execute_tool(tool_name: str, tool_input: Dict[str, Any]) -> Tuple[bool, str,
             return _list_files(tool_input)
         elif tool_name == "remember":
             return _remember(tool_input)
+        elif tool_name == "web_search":
+            return _web_search(tool_input)
+        elif tool_name == "fetch_url":
+            return _fetch_url(tool_input)
+        elif tool_name == "search_freelance_jobs":
+            return _search_freelance_jobs(tool_input)
+        elif tool_name == "search_saas_ideas":
+            return _search_saas_ideas(tool_input)
         else:
             return False, "", f"Unknown tool: {tool_name}"
 
@@ -359,6 +431,107 @@ def _remember(tool_input: Dict[str, Any]) -> Tuple[bool, str, Optional[str]]:
         return False, "", f"Failed to store memory: {str(e)}"
 
 
+def _web_search(tool_input: Dict[str, Any]) -> Tuple[bool, str, Optional[str]]:
+    """Execute web search."""
+    from app.llm.web_tools import web_search
+
+    query = tool_input["query"]
+    num_results = tool_input.get("num_results", 10)
+
+    try:
+        results = web_search(query, num_results=num_results)
+
+        if not results:
+            return True, f"No results found for query: {query}", None
+
+        # Format results
+        output = f"Search results for '{query}':\n\n"
+        for i, r in enumerate(results[:10], 1):
+            output += f"{i}. {r['title']}\n"
+            output += f"   URL: {r['url']}\n"
+            output += f"   {r['snippet'][:150]}...\n\n"
+
+        return True, output, None
+
+    except Exception as e:
+        return False, "", f"Web search failed: {str(e)}"
+
+
+def _fetch_url(tool_input: Dict[str, Any]) -> Tuple[bool, str, Optional[str]]:
+    """Fetch URL content."""
+    import asyncio
+    from app.llm.web_tools import fetch_url
+
+    url = tool_input["url"]
+
+    try:
+        result = asyncio.run(fetch_url(url))
+
+        if not result.get("success"):
+            return False, "", result.get("error", "Failed to fetch URL")
+
+        output = f"Page: {result['title']}\n"
+        output += f"URL: {url}\n\n"
+        output += f"Content:\n{result['text'][:5000]}\n"
+
+        if len(result['text']) > 5000:
+            output += f"\n... (truncated, full text is {len(result['text'])} chars)"
+
+        return True, output, None
+
+    except Exception as e:
+        return False, "", f"Failed to fetch URL: {str(e)}"
+
+
+def _search_freelance_jobs(tool_input: Dict[str, Any]) -> Tuple[bool, str, Optional[str]]:
+    """Search for freelance jobs."""
+    from app.llm.web_tools import search_freelance_jobs
+
+    keywords = tool_input["keywords"]
+    platform = tool_input.get("platform", "all")
+
+    try:
+        results = search_freelance_jobs(keywords, platform=platform)
+
+        if not results:
+            return True, f"No freelance jobs found for: {keywords}", None
+
+        output = f"Freelance jobs for '{keywords}' on {platform}:\n\n"
+        for i, r in enumerate(results[:15], 1):
+            output += f"{i}. {r['title']}\n"
+            output += f"   {r['url']}\n"
+            output += f"   {r['snippet'][:100]}...\n\n"
+
+        return True, output, None
+
+    except Exception as e:
+        return False, "", f"Job search failed: {str(e)}"
+
+
+def _search_saas_ideas(tool_input: Dict[str, Any]) -> Tuple[bool, str, Optional[str]]:
+    """Search for SaaS ideas."""
+    from app.llm.web_tools import search_saas_ideas
+
+    niche = tool_input.get("niche", "")
+
+    try:
+        results = search_saas_ideas(niche=niche)
+
+        if not results:
+            return True, "No SaaS ideas found", None
+
+        output = f"SaaS ideas{' for ' + niche if niche else ''}:\n\n"
+        for i, r in enumerate(results[:15], 1):
+            output += f"{i}. {r['title']}\n"
+            output += f"   {r['url']}\n"
+            output += f"   {r['snippet'][:120]}...\n\n"
+
+        return True, output, None
+
+    except Exception as e:
+        return False, "", f"SaaS search failed: {str(e)}"
+
+
 # =============================================================================
 # Tool Risk Assessment
 # =============================================================================
@@ -370,7 +543,7 @@ def assess_tool_risk(tool_name: str, tool_input: Dict[str, Any]) -> str:
     Returns:
         "low", "medium", or "high"
     """
-    if tool_name in ["read_file", "list_files"]:
+    if tool_name in ["read_file", "list_files", "web_search", "fetch_url", "search_freelance_jobs", "search_saas_ideas"]:
         return "low"  # Read-only operations
 
     if tool_name == "remember":
