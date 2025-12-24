@@ -318,6 +318,12 @@ def get_sidebar_html(active_page: str = "chat") -> str:
             '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>',
         ),
         (
+            "agents",
+            "Agents",
+            "/ui/chat#agents",
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>',
+        ),
+        (
             "settings",
             "Settings",
             "/ui/chat#settings",
@@ -1086,6 +1092,178 @@ BASE_SCRIPTS = r'''
         });
     }
 
+    // ========== AGENT MANAGEMENT ==========
+    async function startAgents() {
+        const checkboxes = document.querySelectorAll(".agent-checkbox:checked");
+        const selectedAgents = Array.from(checkboxes).map(cb => cb.value);
+
+        if (selectedAgents.length === 0) {
+            showStatus("agentStartStatus", "Please select at least one agent", "error");
+            return;
+        }
+
+        const statusEl = $("agentStartStatus");
+        if (statusEl) statusEl.textContent = "Starting agents...";
+
+        try {
+            const response = await fetch("/api/agent/start", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": getApiKey() || "",
+                },
+                body: JSON.stringify({
+                    agents: selectedAgents,
+                    auto_approve_low_risk: true
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Failed to start agents");
+            }
+
+            if (statusEl) statusEl.textContent = `✓ Started ${data.agents_started.length} agents`;
+            setTimeout(() => refreshAgentStatus(), 2000);
+        } catch (error) {
+            if (statusEl) statusEl.textContent = `✗ Error: ${error.message}`;
+        }
+    }
+
+    async function refreshAgentStatus() {
+        try {
+            const response = await fetch("/api/agent/status", {
+                headers: { "X-API-Key": getApiKey() || "" }
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch agent status");
+            }
+
+            const data = await response.json();
+
+            // Update active agents
+            const statusContainer = $("agentStatusContainer");
+            if (statusContainer) {
+                if (Object.keys(data.active_agents).length === 0) {
+                    statusContainer.innerHTML = '<p class="text-xs text-slate-400">No agents running</p>';
+                } else {
+                    let html = '';
+                    for (const [id, agent] of Object.entries(data.active_agents)) {
+                        const statusBadge = agent.status === "running"
+                            ? '<span class="px-2 py-0.5 bg-teal-900/40 text-teal-400 rounded text-xs">Running</span>'
+                            : '<span class="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs">Completed</span>';
+                        html += `
+                            <div class="bg-slate-800/40 border border-slate-700 rounded p-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs font-medium text-slate-200">${agent.role}</span>
+                                    ${statusBadge}
+                                </div>
+                                <div class="text-xs text-slate-400">${agent.task.substring(0, 80)}...</div>
+                            </div>
+                        `;
+                    }
+                    statusContainer.innerHTML = html;
+                }
+            }
+
+            // Update results
+            const resultsContainer = $("agentResultsContainer");
+            if (resultsContainer && data.recent_results && data.recent_results.length > 0) {
+                let html = '';
+                data.recent_results.slice().reverse().forEach(result => {
+                    const resultText = result.result?.response || result.result?.error || "No response";
+                    html += `
+                        <div class="bg-slate-800/40 border border-slate-700 rounded p-3">
+                            <div class="text-xs text-slate-400 mb-1">${new Date(result.completed_at).toLocaleString()}</div>
+                            <div class="text-sm text-slate-200">${resultText.substring(0, 200)}${resultText.length > 200 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                resultsContainer.innerHTML = html;
+            }
+
+            // Update pending approvals
+            const approvalsPanel = $("pendingApprovalsPanel");
+            const approvalsContainer = $("pendingApprovalsContainer");
+            if (data.pending_approvals && data.pending_approvals.length > 0) {
+                if (approvalsPanel) approvalsPanel.classList.remove("hidden");
+                if (approvalsContainer) {
+                    let html = '';
+                    data.pending_approvals.forEach(approval => {
+                        html += `
+                            <div class="bg-amber-900/20 border border-amber-700/40 rounded p-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-slate-200">${approval.context?.role || 'Agent'}</span>
+                                    <span class="text-xs text-amber-400">${approval.tools?.length || 0} tools</span>
+                                </div>
+                                <div class="text-xs text-slate-400 mb-3">${approval.context?.task?.substring(0, 100) || ''}...</div>
+                                <div class="flex gap-2">
+                                    <button onclick="approveAgent('${approval.id}', true)" class="px-3 py-1 bg-teal-600 text-white rounded text-xs hover:bg-teal-700">Approve</button>
+                                    <button onclick="approveAgent('${approval.id}', false)" class="px-3 py-1 bg-slate-700 text-white rounded text-xs hover:bg-slate-600">Reject</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    approvalsContainer.innerHTML = html;
+                }
+            } else {
+                if (approvalsPanel) approvalsPanel.classList.add("hidden");
+            }
+
+        } catch (error) {
+            console.error("Failed to refresh agent status:", error);
+        }
+    }
+
+    async function approveAgent(approvalId, approved) {
+        try {
+            const response = await fetch("/api/agent/approve", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": getApiKey() || "",
+                },
+                body: JSON.stringify({
+                    approval_id: approvalId,
+                    approved: approved
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Failed to process approval");
+            }
+
+            // Refresh status after approval
+            refreshAgentStatus();
+        } catch (error) {
+            console.error("Approval error:", error);
+            alert(`Error: ${error.message}`);
+        }
+    }
+
+    // Attach agent event listeners
+    if ($("startAgentsBtn")) {
+        $("startAgentsBtn").addEventListener("click", startAgents);
+    }
+    if ($("refreshAgentStatus")) {
+        $("refreshAgentStatus").addEventListener("click", refreshAgentStatus);
+    }
+
+    // Make approve function global so onclick can access it
+    window.approveAgent = approveAgent;
+
+    // Auto-refresh agent status every 10 seconds when on agents page
+    setInterval(() => {
+        const agentsSection = $("section-agents");
+        if (agentsSection && !agentsSection.classList.contains("hidden")) {
+            refreshAgentStatus();
+        }
+    }, 10000);
+
     // Register service worker for PWA
     if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register(`/static/sw.js?v=${UI_VERSION}`).catch(() => {});
@@ -1233,6 +1411,112 @@ def get_chat_sections_html() -> str:
                     <div class="content-panel p-4">
                         <h3 class="text-sm font-semibold text-slate-200 mb-2">UI Version</h3>
                         <p class="text-sm text-slate-400">v__UI_VERSION__</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-agents" data-section-panel="agents" class="section-panel hidden">
+            <div class="section-body custom-scrollbar">
+                <div class="section-header">
+                    <h2 class="section-title">Autonomous Agents</h2>
+                    <p class="section-subtitle">Start and monitor AI agents that work autonomously to find money-making opportunities.</p>
+                </div>
+
+                <div class="bg-teal-900/20 border border-teal-700/40 rounded-lg p-4 mb-4">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-teal-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <div class="text-sm text-slate-300">
+                            <strong>How it works:</strong> Agents search the web, find opportunities, and execute low-risk actions automatically.
+                            You'll only be asked to approve high-risk actions (file writes, commands, deployments).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid gap-4">
+                    <!-- Agent Status -->
+                    <div class="content-panel p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-slate-200">Agent Status</h3>
+                            <button id="refreshAgentStatus" class="px-2 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600">
+                                <svg class="w-3 h-3 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="agentStatusContainer" class="space-y-2">
+                            <p class="text-xs text-slate-400">No agents running</p>
+                        </div>
+                    </div>
+
+                    <!-- Start Agents -->
+                    <div class="content-panel p-4">
+                        <h3 class="text-sm font-semibold text-slate-200 mb-3">Start Agent Cycle</h3>
+                        <p class="text-xs text-slate-400 mb-3">Select agents to run in parallel</p>
+
+                        <div class="space-y-2 mb-4">
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="job_hunter" checked />
+                                <div class="flex-1">
+                                    <div class="font-medium">Job Hunter</div>
+                                    <div class="text-xs text-slate-400">Find high-paying freelance jobs</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="content_creator" checked />
+                                <div class="flex-1">
+                                    <div class="font-medium">Content Creator</div>
+                                    <div class="text-xs text-slate-400">Create revenue-generating content</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="developer" checked />
+                                <div class="flex-1">
+                                    <div class="font-medium">Developer</div>
+                                    <div class="text-xs text-slate-400">Build profitable SaaS products</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="marketer" checked />
+                                <div class="flex-1">
+                                    <div class="font-medium">Marketer</div>
+                                    <div class="text-xs text-slate-400">Promote products and drive traffic</div>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                <input type="checkbox" class="agent-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-teal-500" value="researcher" checked />
+                                <div class="flex-1">
+                                    <div class="font-medium">Researcher</div>
+                                    <div class="text-xs text-slate-400">Discover new opportunities</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button id="startAgentsBtn" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium">
+                                Start Agents
+                            </button>
+                            <span id="agentStartStatus" class="text-xs text-slate-400"></span>
+                        </div>
+                    </div>
+
+                    <!-- Agent Results -->
+                    <div class="content-panel p-4">
+                        <h3 class="text-sm font-semibold text-slate-200 mb-3">Recent Results</h3>
+                        <div id="agentResultsContainer" class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
+                            <p class="text-xs text-slate-400">No results yet</p>
+                        </div>
+                    </div>
+
+                    <!-- Pending Approvals -->
+                    <div id="pendingApprovalsPanel" class="content-panel p-4 hidden">
+                        <h3 class="text-sm font-semibold text-slate-200 mb-3">Pending Approvals</h3>
+                        <div id="pendingApprovalsContainer" class="space-y-3">
+                            <!-- Rendered by JS -->
+                        </div>
                     </div>
                 </div>
             </div>
