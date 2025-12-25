@@ -27,6 +27,7 @@ from app.api.approvals_ui import router as approvals_ui_router  # Phase A1 UI
 from app.api.developer import router as developer_router
 from app.api.xone import router as xone_router  # Xone AI Agent API
 from app.api.agent_controller import router as agent_controller_router  # Autonomous Agent Controller
+from app.api.debug import router as debug_router  # Debug endpoints
 from app.ui.command_center import router as command_center_router  # Phase A2
 from app.core.security import APIKeyMiddleware
 from app.core.request_logging import RequestLoggingMiddleware
@@ -176,6 +177,7 @@ app.include_router(approvals_ui_router)
 app.include_router(developer_router)
 app.include_router(xone_router)  # Xone AI Agent API
 app.include_router(agent_controller_router)  # Autonomous Agent Controller
+app.include_router(debug_router)  # Debug endpoints
 app.include_router(command_center_router)  # Phase A2: Command Center
 
 # Mount static files for PWA (Phase A2)

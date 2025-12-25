@@ -482,10 +482,31 @@ BASE_SCRIPTS = r'''
     }
 
     // ========== API KEY ==========
-    function getApiKey() { return localStorage.getItem(API_KEY_STORAGE_KEY) || ""; }
+    function getApiKey() {
+        const key = localStorage.getItem(API_KEY_STORAGE_KEY) || "";
+        // Debug: Log key retrieval to help diagnose CSS pollution bug
+        if (key && (key.includes('{') || key.includes('px') || key.length > 100)) {
+            console.error("WARNING: API key appears to be corrupted with CSS/HTML:", key.substring(0, 100));
+            console.error("Clearing corrupted key from localStorage");
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+            return "";
+        }
+        return key;
+    }
     function setApiKey(key) {
-        if (key) localStorage.setItem(API_KEY_STORAGE_KEY, key);
-        else localStorage.removeItem(API_KEY_STORAGE_KEY);
+        // Validate key before storing
+        if (key) {
+            const trimmedKey = key.trim();
+            // Check if key looks like CSS/HTML instead of an actual API key
+            if (trimmedKey.includes('{') || trimmedKey.includes('<') || trimmedKey.includes('px')) {
+                console.error("ERROR: Attempted to save invalid API key (looks like CSS/HTML):", trimmedKey.substring(0, 100));
+                alert("Error: Invalid API key format. Please enter a valid API key.");
+                return;
+            }
+            localStorage.setItem(API_KEY_STORAGE_KEY, trimmedKey);
+        } else {
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+        }
         updateApiKeyUI();
     }
     function updateApiKeyUI() {
@@ -1026,6 +1047,15 @@ BASE_SCRIPTS = r'''
 
     // ========== INIT ==========
     async function init() {
+        // Debug: Log all localStorage keys on init
+        console.log("=== localStorage Debug ===");
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const value = localStorage.getItem(key);
+            console.log(`${key}:`, value ? value.substring(0, 100) : "(empty)");
+        }
+        console.log("=========================");
+
         migrateLegacyKeys();
         initDarkMode();
         updateApiKeyUI();

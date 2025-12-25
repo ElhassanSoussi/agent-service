@@ -43,9 +43,10 @@ PUBLIC_PATHS = frozenset([
 
 # Route prefixes that don't require authentication
 PUBLIC_PREFIXES = (
-    "/ui",      # Web UI is public (auth handled in client JS)
-    "/admin/",  # Admin uses separate X-Admin-Key
-    "/static",  # Static files (PWA manifest, service worker, icons)
+    "/ui",          # Web UI is public (auth handled in client JS)
+    "/admin/",      # Admin uses separate X-Admin-Key
+    "/static",      # Static files (PWA manifest, service worker, icons)
+    "/api/debug/",  # Debug endpoints (DEV only)
 )
 
 
