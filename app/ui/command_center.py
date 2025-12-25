@@ -419,8 +419,8 @@ BASE_SCRIPTS = r'''
     const MAX_POLL_TIME = 60000;
     const POLL_INTERVAL = 1000;
 
-    const CHAT_ENDPOINT = PAGE_MODE === "developer" ? "/api/developer/chat" : "/llm/generate";
-    const STREAM_ENDPOINT = PAGE_MODE === "developer" ? "/api/developer/chat?stream=1" : "/llm/stream";
+    const CHAT_ENDPOINT = PAGE_MODE === "developer" ? "/api/xone/chat" : "/api/xone/chat";
+    const STREAM_ENDPOINT = PAGE_MODE === "developer" ? "/api/xone/chat" : "/api/xone/chat";
 
     const STORAGE_KEYS = {
         API_KEY: API_KEY_STORAGE_KEY,
@@ -831,7 +831,6 @@ BASE_SCRIPTS = r'''
         scrollToBottom();
 
         try {
-            const systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || null;
             const apiKey = getApiKey();
             const res = await fetch(CHAT_ENDPOINT, {
                 method: "POST",
@@ -839,7 +838,11 @@ BASE_SCRIPTS = r'''
                     "Content-Type": "application/json",
                     "X-API-Key": apiKey || ""
                 },
-                body: JSON.stringify({ prompt, system_prompt: systemPrompt }),
+                body: JSON.stringify({
+                    message: prompt,
+                    mode: PAGE_MODE === "developer" ? "developer" : "chat",
+                    stream: false
+                }),
             });
 
             if (res.status === 401 || res.status === 403) {
@@ -864,68 +867,8 @@ BASE_SCRIPTS = r'''
     }
 
     async function submitMessageStreaming(prompt) {
-        if (isProcessing) return;
-        isProcessing = true;
-        if (typingIndicator) typingIndicator.classList.remove("hidden");
-        scrollToBottom();
-
-        const messageId = addMessage("assistant", "", { streaming: true });
-        let content = "";
-        try {
-            const systemPrompt = localStorage.getItem(SYSTEM_PROMPT_KEY) || null;
-            const apiKey = getApiKey();
-            const res = await fetch(STREAM_ENDPOINT, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-API-Key": apiKey || ""
-                },
-                body: JSON.stringify({ prompt, system_prompt: systemPrompt, stream: true }),
-            });
-
-            if (res.status === 401 || res.status === 403) {
-                updateMessageContent(messageId, "Authentication required. Set your API key in Settings.", false);
-                return;
-            }
-
-            if (!res.ok || !res.body) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || "Streaming failed");
-            }
-
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const chunks = buffer.split("\n\n");
-                buffer = chunks.pop() || "";
-
-                for (const chunk of chunks) {
-                    const lines = chunk.split("\n");
-                    for (const line of lines) {
-                        if (!line.startsWith("data:")) continue;
-                        const data = line.replace("data:", "").trim();
-                        if (!data) continue;
-                        if (data === "[DONE]") {
-                            updateMessageContent(messageId, content, false);
-                            return;
-                        }
-                        content += data;
-                        updateMessageContent(messageId, content, true);
-                        scrollToBottom();
-                    }
-                }
-            }
-        } catch (e) {
-            updateMessageContent(messageId, `Error: ${e.message}`, false);
-        } finally {
-            isProcessing = false;
-            if (typingIndicator) typingIndicator.classList.add("hidden");
-        }
+        // Note: Streaming not yet implemented for Xone endpoint, fall back to non-streaming
+        return submitMessageNonStreaming(prompt);
     }
 
     async function pollJobStatus(jobId) {
